@@ -8,7 +8,10 @@
 import UIKit
 
 final class ViewController: UIViewController {
-    var tableView: UITableView = {
+    
+    // MARK: - Private properties
+    
+    private var tableView: UITableView = {
         let table = UITableView(frame: .init(x: 0, y: 0,
                                              width: UIScreen.main.bounds.width,
                                              height: UIScreen.main.bounds.height), style: .insetGrouped)
@@ -16,88 +19,97 @@ final class ViewController: UIViewController {
         return table
     }()
     
-    var viewContainer: UIView!
-    var shuffleButton: UIBarButtonItem!
+    private var viewContainer: UIView!
+    private var shuffleButton: UIBarButtonItem!
+    private var dataSource: UITableViewDiffableDataSource<Section, CellNumber>!
+    private var numbers = [CellNumber]()
+    
+    // MARK: - Lifecycle
     
     override func viewDidLoad() {
         super.viewDidLoad()
-//        tableView.clipsToBounds = true
-//        tableView.layer.cornerRadius = 30
+        dataSource = UITableViewDiffableDataSource(tableView: tableView,
+                                                   cellProvider: { tableView, indexPath, model in
+            let cell = tableView.dequeueReusableCell(withIdentifier: "cell", for: indexPath)
+            cell.textLabel?.text = String(model.number)
+            return cell
+        })
+        updateDataSource()
+        setNavigation()
         view.addSubview(tableView)
-//        tableView.layer.cornerRadius = 8
-//        tableView.layer.masksToBounds = true
-//        tableView.frame = .init(x: 0, y: 0,
-//                                width: view.bounds.width - view.layoutMargins.left * 2,
-//                                height: view.bounds.height)
-//
-        shuffleButton = UIBarButtonItem(title: "ShakeIT", style: .plain, target: self, action: #selector(shuffleRows))
-        navigationItem.rightBarButtonItems = [shuffleButton]
-        navigationItem.title = "TASK 4"
         setupDelegates()
     }
     
-    @objc
-    func shuffleRows() {
-        // Get all the rows in the table view
-        let rows = (0..<tableView.numberOfRows(inSection: 0)).map { IndexPath(row: $0, section: 0) }
-        // Shuffle the rows
-        let shuffledRows = rows.shuffled()
-        // Keep track of the current textLabel.text for each cell
-        var cellTexts = [String]()
-        for row in rows {
-            guard let cell = tableView.cellForRow(at: row) else {
-                print("🌝🌝🌝")
-                continue
-            }
-            cellTexts.append(cell.textLabel?.text ?? "")
-        }
-        // Perform the shuffling animation
-        tableView.beginUpdates()
-        for (oldRow, newRow) in zip(rows, shuffledRows) {
-            tableView.moveRow(at: oldRow, to: newRow)
-        }
-        // Update the textLabel.text for each cell at its new position
-        for (row, text) in zip(rows, cellTexts) {
-            guard let cell = tableView.cellForRow(at: row) else { continue }
-            cell.textLabel?.text = text
-        }
-        tableView.endUpdates()
-    }
-
-    private func setupDelegates() {
-        tableView.dataSource = self
-        tableView.delegate = self
-    }
-
     override func viewWillLayoutSubviews() {
         super.viewWillLayoutSubviews()
         tableView.frame = view.bounds
     }
     
-    func createDict() {
-        for (position, element) in Array(1...30).enumerated() {
-            print(position)
+    // MARK: - @objc method
+    
+    @objc private
+    func shuffleRows() {
+        let currentSnapshot = self.dataSource.snapshot()
+        let mixedNumbers = currentSnapshot.itemIdentifiers.shuffled()
+        var snapshot = NSDiffableDataSourceSnapshot<Section, CellNumber>()
+        snapshot.appendSections([.first])
+        snapshot.appendItems(mixedNumbers)
+        self.dataSource.apply(snapshot, animatingDifferences: true, completion: nil)
+    }
+
+    // MARK: - Private methods
+    
+    private func setupDelegates() {
+        tableView.delegate = self
+    }
+    
+    private func setNavigation() {
+        shuffleButton = UIBarButtonItem(title: "ShakeIT", style: .plain, target: self, action: #selector(shuffleRows))
+        navigationItem.rightBarButtonItems = [shuffleButton]
+        navigationItem.title = "TASK 4"
+    }
+    
+    private func updateDataSource() {
+        var snapshot = NSDiffableDataSourceSnapshot<Section, CellNumber>()
+        snapshot.appendSections([.first])
+        createDict()
+        snapshot.appendItems(numbers)
+        dataSource.apply(snapshot, animatingDifferences: true, completion: nil)
+    }
+    
+    private func createDict() {
+        for number in Array(1...30) {
+            numbers.append(CellNumber(number: number))
         }
+    }
+    
+    private enum Section {
+        case first
+    }
+    
+    private struct CellNumber: Hashable {
+        let number: Int
     }
 }
 
-extension ViewController: UITableViewDelegate, UITableViewDataSource {
-    func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
-        return 30
-    }
 
-    func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
-        let cell = tableView.dequeueReusableCell(withIdentifier: "cell", for: indexPath)
-        cell.frame = .init(x: 0, y: 0, width: view.bounds.width, height: view.bounds.height/30)
-        cell.textLabel?.text = "\(indexPath.row + 1)"
-        return cell
-    }
-    
+extension ViewController: UITableViewDelegate {
     func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
-        guard let cell = tableView.cellForRow(at: indexPath) else { return }
-        cell.accessoryType = .checkmark
-        tableView.beginUpdates()
-        tableView.moveRow(at: indexPath, to: IndexPath(row: 0, section: 0))
-        tableView.endUpdates()
+        let selectedtCell = tableView.cellForRow(at: indexPath)
+        selectedtCell?.selectionStyle = .none
+        switch selectedtCell?.accessoryType == .checkmark {
+        case true:
+            selectedtCell?.accessoryType = .none
+        case false:
+            guard let selectedCellNumber = dataSource.itemIdentifier(for: indexPath) else { return }
+            var snapshot = dataSource.snapshot()
+            snapshot.deleteItems([selectedCellNumber])
+            let newIndexPath = IndexPath(row: 0, section: 0)
+            snapshot.insertItems([selectedCellNumber],
+                                 beforeItem: snapshot.itemIdentifiers[newIndexPath.row])
+            dataSource.apply(snapshot, animatingDifferences: true)
+            tableView.cellForRow(at: IndexPath(row: 0, section: 0))?.accessoryType = .checkmark
+            tableView.selectRow(at: newIndexPath, animated: true, scrollPosition: .top)
+        }
     }
 }
