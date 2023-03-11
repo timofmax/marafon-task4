@@ -49,14 +49,13 @@ final class ViewController: UIViewController {
     
     @objc private
     func shuffleRows() {
-        let currentSnapshot = self.dataSource.snapshot()
-        let mixedNumbers = currentSnapshot.itemIdentifiers.shuffled()
-        var snapshot = NSDiffableDataSourceSnapshot<Section, CellNumber>()
-        snapshot.appendSections([.first])
-        snapshot.appendItems(mixedNumbers)
-        self.dataSource.apply(snapshot, animatingDifferences: true, completion: nil)
+        let netSnapshot = dataSource.snapshot().itemIdentifiers.shuffled()
+        var snapShot = NSDiffableDataSourceSnapshot<Section, CellNumber>()
+        snapShot.appendSections([.first])
+        snapShot.appendItems(netSnapshot)
+        self.dataSource.apply(snapShot, animatingDifferences: true)
     }
-
+    
     // MARK: - Private methods
     
     private func setupDelegates() {
@@ -101,15 +100,14 @@ extension ViewController: UITableViewDelegate {
         case true:
             selectedtCell?.accessoryType = .none
         case false:
-            guard let selectedCellNumber = dataSource.itemIdentifier(for: indexPath) else { return }
-            var snapshot = dataSource.snapshot()
-            snapshot.deleteItems([selectedCellNumber])
-            let newIndexPath = IndexPath(row: 0, section: 0)
-            snapshot.insertItems([selectedCellNumber],
-                                 beforeItem: snapshot.itemIdentifiers[newIndexPath.row])
-            dataSource.apply(snapshot, animatingDifferences: true)
-            tableView.cellForRow(at: IndexPath(row: 0, section: 0))?.accessoryType = .checkmark
-            tableView.selectRow(at: newIndexPath, animated: true, scrollPosition: .top)
+            if let selectedCellNumber = dataSource.itemIdentifier(for: indexPath) {
+                var snapshot = dataSource.snapshot()
+                snapshot.deleteItems([selectedCellNumber])
+                snapshot.insertItems([selectedCellNumber],
+                                     beforeItem: snapshot.itemIdentifiers.first ?? snapshot.itemIdentifiers[0])
+                dataSource.apply(snapshot, animatingDifferences: true)
+                tableView.cellForRow(at: IndexPath(row: 0, section: 0))?.accessoryType = .checkmark
+            }
         }
     }
 }
